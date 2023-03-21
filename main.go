@@ -11,11 +11,14 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readconcern"
 )
 
 const (
 	connectionString = "mongodb://localhost:27017"
 	dbName           = "mydb"
+	FirstListKey     = "000000000000000000000001"
+	FirstPageKey     = "000000000000000000000100"
 )
 
 type Article struct {
@@ -26,41 +29,72 @@ type Article struct {
 
 type Page struct {
 	ID         primitive.ObjectID `bson:"_id,omitempty"`
-	Articles   []Article          `json:"articles"`
-	NextPageID primitive.ObjectID `bson:"nextPageId,omitempty"`
+	Articles   []Article          `bson:"articles"`
+	NextPageID primitive.ObjectID `bson:"nextPageID,omitempty"`
 }
 
 type List struct {
 	ID         primitive.ObjectID `bson:"_id,omitempty"`
 	HeadPageID primitive.ObjectID `bson:"headpageId,omitempty"`
-	Timestamp  int64              `json:"timestamp"`
 }
 
-const FirstPageKey = "000000000000000000000001"
+var client *mongo.Client
+var listsCollection *mongo.Collection
+var pagesCollection *mongo.Collection
 
 func init() {
-	client, err := mongo.NewClient(options.Client().ApplyURI(connectionString))
+	var err error
+	client, err = mongo.NewClient(options.Client().ApplyURI(connectionString))
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer client.Disconnect(context.Background())
 
 	err = client.Connect(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	collection := client.Database(dbName).Collection("pages")
+	listsCollection := client.Database(dbName).Collection("lists", options.Collection().SetReadConcern(readconcern.Majority()))
+	pagesCollection = client.Database(dbName).Collection("pages", options.Collection().SetReadConcern(readconcern.Majority()))
 
+	list := List{}
+
+	FirstListID, err := primitive.ObjectIDFromHex(FirstListKey)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 	FirstPageID, err := primitive.ObjectIDFromHex(FirstPageKey)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
+	// Check if first list exists
+	filter := bson.M{"_id": FirstListID}
+	err = listsCollection.FindOne(context.Background(), filter).Decode(&list)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			// Create list if it doesn't be found in database
+			FirstList := List{
+				ID:         FirstListID,
+				HeadPageID: FirstPageID,
+			}
+			result, err := listsCollection.InsertOne(context.Background(), &FirstList)
+			if err != nil {
+				log.Fatal(err)
+			}
+			InsertedID := result.InsertedID.(primitive.ObjectID)
+			if InsertedID != FirstListID {
+				log.Fatal("InsertedID != FirstListID")
+			}
+		}
+	} else {
+		log.Printf("list %q already exist.", FirstListID)
+	}
+
 	// Check if first page exists
-	filter := bson.M{"_id": FirstPageID}
+	filter = bson.M{"_id": FirstPageID}
 	page := Page{}
-	err = collection.FindOne(context.Background(), filter).Decode(&page)
+	err = pagesCollection.FindOne(context.Background(), filter).Decode(&page)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			FirstPage := Page{
@@ -68,7 +102,7 @@ func init() {
 				Articles:   []Article{},
 				NextPageID: primitive.NilObjectID,
 			}
-			result, err := collection.InsertOne(context.Background(), &FirstPage)
+			result, err := pagesCollection.InsertOne(context.Background(), &FirstPage)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -77,10 +111,13 @@ func init() {
 				log.Fatal("InsertedID != FirstPageID")
 			}
 		}
+	} else {
+		log.Printf("page %q already exist.", FirstPageID)
 	}
 }
 
 func main() {
+	defer client.Disconnect(context.Background())
 	r := mux.NewRouter()
 	r.HandleFunc("/list/{list_id}", getHead).Methods("GET")
 	r.HandleFunc("/page/getall", getAllPage).Methods("GET")
@@ -100,21 +137,8 @@ func getHead(w http.ResponseWriter, r *http.Request) {
 	list := List{}
 	head := Page{}
 
-	client, err := mongo.NewClient(options.Client().ApplyURI(connectionString))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer client.Disconnect(context.Background())
-
-	err = client.Connect(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	collection := client.Database(dbName).Collection("lists")
-
 	filter := bson.M{"_id": listID}
-	err = collection.FindOne(context.Background(), filter).Decode(&list)
+	err = listsCollection.FindOne(context.Background(), filter).Decode(&list)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			http.NotFound(w, r)
@@ -129,10 +153,8 @@ func getHead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	collection = client.Database(dbName).Collection("pages")
-
 	filter = bson.M{"_id": list.HeadPageID}
-	err = collection.FindOne(context.Background(), filter).Decode(&head)
+	err = pagesCollection.FindOne(context.Background(), filter).Decode(&head)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -145,20 +167,7 @@ func getAllPage(w http.ResponseWriter, r *http.Request) {
 	ctx := context.TODO()
 	var pages []Page
 
-	client, err := mongo.NewClient(options.Client().ApplyURI(connectionString))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer client.Disconnect(context.Background())
-
-	err = client.Connect(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	collection := client.Database(dbName).Collection("pages")
-
-	cursor, err := collection.Find(ctx, bson.M{})
+	cursor, err := pagesCollection.Find(ctx, bson.M{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -172,7 +181,10 @@ func getAllPage(w http.ResponseWriter, r *http.Request) {
 	defer cursor.Close(ctx)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(pages)
+	err = json.NewEncoder(w).Encode(pages)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func getPage(w http.ResponseWriter, r *http.Request) {
@@ -185,21 +197,8 @@ func getPage(w http.ResponseWriter, r *http.Request) {
 
 	page := Page{}
 
-	client, err := mongo.NewClient(options.Client().ApplyURI(connectionString))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer client.Disconnect(context.Background())
-
-	err = client.Connect(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	collection := client.Database(dbName).Collection("pages")
-
 	filter := bson.M{"_id": pageID}
-	err = collection.FindOne(context.Background(), filter).Decode(&page)
+	err = pagesCollection.FindOne(context.Background(), filter).Decode(&page)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			http.NotFound(w, r)
@@ -233,42 +232,32 @@ func set(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("%q\n", articles)
 
-	client, err := mongo.NewClient(options.Client().ApplyURI(connectionString))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer client.Disconnect(context.Background())
-
-	err = client.Connect(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	collection := client.Database(dbName).Collection("pages")
-
 	// Check if page exists
 	filter := bson.M{"_id": pageID}
 	page := Page{}
-	err = collection.FindOne(context.Background(), filter).Decode(&page)
+	err = pagesCollection.FindOne(context.Background(), filter).Decode(&page)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			log.Println("create a new page.")
 			nextPageID := primitive.NewObjectID()
 			// Find the last inserted page and update its nextPageID field
 			var lastPage Page
-			filter := bson.M{"nextPageID": bson.M{"$exists": false}} //bson.M{"nextPageID": primitive.NilObjectID}
-			err = collection.FindOne(context.Background(), filter).Decode(&lastPage)
+			filter := bson.M{"nextPageID": bson.M{"$exists": false}}
+			// filter := bson.M{"nextPageID": primitive.NilObjectID}
+			err = pagesCollection.FindOne(context.Background(), filter).Decode(&lastPage)
 			if err != nil {
 				log.Println("Cannot find last inserted page.")
-				log.Println("It is the first page.")
-				// log.Fatal(err)
+				log.Fatal(err)
 			} else {
 				filter = bson.M{"_id": lastPage.ID}
+				log.Printf("lastPage.ID: %q\n", lastPage.ID)
+				log.Printf("nextPageID: %q\n", nextPageID)
 				update := bson.M{"$set": bson.M{"nextPageID": nextPageID}}
-				_, err = collection.UpdateOne(context.Background(), filter, update)
+				result, err := pagesCollection.UpdateOne(context.Background(), filter, update)
 				if err != nil {
 					log.Fatal(err)
 				}
+				log.Printf("matched: %v, modified: %v\n", result.MatchedCount, result.ModifiedCount)
 			}
 
 			PageID := nextPageID
@@ -279,9 +268,7 @@ func set(w http.ResponseWriter, r *http.Request) {
 				NextPageID: primitive.NilObjectID,
 			}
 
-			log.Printf("NextPageID: %q\n", nextPage.ID)
-
-			result, err := collection.InsertOne(context.Background(), &nextPage)
+			result, err := pagesCollection.InsertOne(context.Background(), &nextPage)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -289,14 +276,13 @@ func set(w http.ResponseWriter, r *http.Request) {
 			if InsertedID != PageID {
 				log.Fatal("InsertedID != PageID")
 			}
-			log.Printf("InsertedID: %q\n", InsertedID)
 		} else {
 			log.Fatal(err)
 		}
 	} else {
 		// If page exists, update its articles
 		update := bson.M{"$set": bson.M{"articles": articles}}
-		_, err = collection.UpdateOne(context.Background(), filter, update)
+		_, err = pagesCollection.UpdateOne(context.Background(), filter, update)
 		if err != nil {
 			log.Fatal(err)
 		}
