@@ -16,21 +16,26 @@ import (
 
 const (
 	connectionString = "mongodb://localhost:27017"
-	dbName           = "mydb"
-	FirstListKey     = "000000000000000000000001"
-	FirstPageKey     = "000000000000000000000100"
+	dbName           = "shared-key-value-list"
+)
+
+const (
+	FirstListKey = "000000000000000000000001"
+	FirstPageKey = "000000000000000000000100"
 )
 
 type Article struct {
-	Title   string `json:"title"`
-	Author  string `json:"author"`
-	Content string `json:"content"`
+	ID      primitive.ObjectID `bson:"_id,omitempty"`
+	Title   string             `json:"title"`
+	Author  string             `json:"author"`
+	Content string             `json:"content"`
 }
 
 type Page struct {
-	ID         primitive.ObjectID `bson:"_id,omitempty"`
-	Articles   []Article          `bson:"articles"`
-	NextPageID primitive.ObjectID `bson:"nextPageID,omitempty"`
+	ID         primitive.ObjectID   `bson:"_id,omitempty"`
+	ListID     primitive.ObjectID   `bson:"list_id,omitempty"`
+	ArticleID  []primitive.ObjectID `bson:"article_id"`
+	NextPageID primitive.ObjectID   `bson:"nextPageID,omitempty"`
 }
 
 type List struct {
@@ -41,6 +46,7 @@ type List struct {
 var client *mongo.Client
 var listsCollection *mongo.Collection
 var pagesCollection *mongo.Collection
+var articlesCollection *mongo.Collection
 
 func init() {
 	var err error
@@ -54,8 +60,9 @@ func init() {
 		log.Fatal(err)
 	}
 
-	listsCollection := client.Database(dbName).Collection("lists", options.Collection().SetReadConcern(readconcern.Majority()))
+	listsCollection = client.Database(dbName).Collection("lists", options.Collection().SetReadConcern(readconcern.Majority()))
 	pagesCollection = client.Database(dbName).Collection("pages", options.Collection().SetReadConcern(readconcern.Majority()))
+	articlesCollection = client.Database(dbName).Collection("articles", options.Collection().SetReadConcern(readconcern.Majority()))
 
 	list := List{}
 
@@ -99,7 +106,7 @@ func init() {
 		if err == mongo.ErrNoDocuments {
 			FirstPage := Page{
 				ID:         FirstPageID,
-				Articles:   []Article{},
+				ListID:     FirstListID,
 				NextPageID: primitive.NilObjectID,
 			}
 			result, err := pagesCollection.InsertOne(context.Background(), &FirstPage)
@@ -119,10 +126,19 @@ func init() {
 func main() {
 	defer client.Disconnect(context.Background())
 	r := mux.NewRouter()
+
+	// list
 	r.HandleFunc("/list/{list_id}", getHead).Methods("GET")
+
+	// page
 	r.HandleFunc("/page/getall", getAllPage).Methods("GET")
 	r.HandleFunc("/page/get/{page_id}", getPage).Methods("GET")
 	r.HandleFunc("/page/set/{page_id}", set).Methods("POST")
+
+	// article
+	r.HandleFunc("/article/getall", getAllArticle).Methods("GET")
+	r.HandleFunc("/article/create", createArticle).Methods("POST")
+
 	log.Fatal(http.ListenAndServe(":8000", r))
 }
 
@@ -135,7 +151,6 @@ func getHead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	list := List{}
-	head := Page{}
 
 	filter := bson.M{"_id": listID}
 	err = listsCollection.FindOne(context.Background(), filter).Decode(&list)
@@ -153,14 +168,8 @@ func getHead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filter = bson.M{"_id": list.HeadPageID}
-	err = pagesCollection.FindOne(context.Background(), filter).Decode(&head)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(head)
+	json.NewEncoder(w).Encode(list.HeadPageID)
 }
 
 func getAllPage(w http.ResponseWriter, r *http.Request) {
@@ -221,16 +230,25 @@ func set(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("input pageID: %q\n", pageID)
-
-	articles := []Article{}
-
-	err = json.NewDecoder(r.Body).Decode(&articles)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	//***************************************************************************************************
+	// Set the pipeline for the query
+	pipeline := bson.A{
+		bson.M{"$sample": bson.M{"size": 5}},
+		bson.M{"$project": bson.M{"_id": 0, "title": 1, "author": 1, "content": 1}},
 	}
 
-	log.Printf("%q\n", articles)
+	// Execute the query and get the results
+	cursor, err := articlesCollection.Aggregate(context.Background(), pipeline)
+	if err != nil {
+		// Handle the error
+	}
+
+	defer cursor.Close(context.Background())
+
+	var articles []Article
+	if err := cursor.All(context.Background(), &articles); err != nil {
+		// Handle the error
+	}
 
 	// Check if page exists
 	filter := bson.M{"_id": pageID}
@@ -238,7 +256,6 @@ func set(w http.ResponseWriter, r *http.Request) {
 	err = pagesCollection.FindOne(context.Background(), filter).Decode(&page)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			log.Println("create a new page.")
 			nextPageID := primitive.NewObjectID()
 			// Find the last inserted page and update its nextPageID field
 			var lastPage Page
@@ -246,12 +263,10 @@ func set(w http.ResponseWriter, r *http.Request) {
 			// filter := bson.M{"nextPageID": primitive.NilObjectID}
 			err = pagesCollection.FindOne(context.Background(), filter).Decode(&lastPage)
 			if err != nil {
-				log.Println("Cannot find last inserted page.")
+				log.Println("Cannot find the last inserted page.")
 				log.Fatal(err)
 			} else {
 				filter = bson.M{"_id": lastPage.ID}
-				log.Printf("lastPage.ID: %q\n", lastPage.ID)
-				log.Printf("nextPageID: %q\n", nextPageID)
 				update := bson.M{"$set": bson.M{"nextPageID": nextPageID}}
 				result, err := pagesCollection.UpdateOne(context.Background(), filter, update)
 				if err != nil {
@@ -264,7 +279,7 @@ func set(w http.ResponseWriter, r *http.Request) {
 			// If page does not exist, create a new one
 			nextPage := Page{
 				ID:         PageID,
-				Articles:   articles,
+				ListID:     lastPage.ListID,
 				NextPageID: primitive.NilObjectID,
 			}
 
@@ -281,12 +296,57 @@ func set(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// If page exists, update its articles
-		update := bson.M{"$set": bson.M{"articles": articles}}
-		_, err = pagesCollection.UpdateOne(context.Background(), filter, update)
-		if err != nil {
-			log.Fatal(err)
-		}
+		// update := bson.M{"$set": bson.M{"article_id": articles}}
+		// _, err = pagesCollection.UpdateOne(context.Background(), filter, update)
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func getAllArticle(w http.ResponseWriter, r *http.Request) {
+	ctx := context.TODO()
+	var articles []Article
+
+	cursor, err := articlesCollection.Find(ctx, bson.M{})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = cursor.All(ctx, &articles)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// log.Println(articles)
+
+	defer cursor.Close(ctx)
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(articles)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func createArticle(w http.ResponseWriter, r *http.Request) {
+	var articles []Article
+
+	err := json.NewDecoder(r.Body).Decode(&articles)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	articlesToInsert := make([]interface{}, len(articles))
+	for i, article := range articles {
+		articlesToInsert[i] = article
+	}
+	res, err := articlesCollection.InsertMany(context.Background(), articlesToInsert)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("inserted documents with IDs %v\n", res.InsertedIDs)
 }
