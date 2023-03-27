@@ -1,0 +1,121 @@
+package main
+
+import (
+	"gorm.io/gorm"
+)
+
+// func connectToDB(host string, port string, user string, password string, dbname string) (*gorm.DB, error) {
+// 	// Define the connection string for the PostgreSQL server
+// 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
+
+// 	// Connect to the PostgreSQL server
+// 	// db, err := gorm.Open("postgres", connStr)
+// 	db, err := gorm.Open(postgres.Open(connStr), &gorm.Config{})
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	return db, nil
+// }
+
+// // createDatabaseIfNotExists creates a new database with the given name if it does not already exist.
+// func createDatabaseIfNotExists(conn *sql.DB, dbName string) error {
+// 	// Check if the database already exists
+// 	rows, err := conn.Query(fmt.Sprintf("SELECT 1 FROM pg_database WHERE datname = '%s'", dbName))
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer rows.Close()
+
+// 	if rows.Next() {
+// 		// Database already exists, no need to create it
+// 		return nil
+// 	}
+
+// 	// Database does not exist, create it
+// 	_, err = conn.Exec(fmt.Sprintf("CREATE DATABASE %s", dbName))
+// 	if err != nil {
+// 		return err
+// 	}
+// 	log.Println("Database created successfully")
+
+// 	return nil
+// }
+
+// func getListByID(db *gorm.DB, id uint, list *List) error {
+// 	if err := db.Table("lists").First(list, id).Error; err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
+
+// func getPageByID(db *gorm.DB, id uint, page *Page) error {
+// 	if err := db.Table("pages").First(page, id).Error; err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
+
+// // GetLastPage gets the last Page in the database.
+// func getLastPage(db *gorm.DB, lastPage *Page) error {
+// 	return db.Table("pages").Last(lastPage).Error
+// }
+
+// func getArticlesByPageID(db *gorm.DB, pageID uint, articles *[]Article) error {
+// 	if err := db.Table("articles").Where("page_id = ?", pageID).Find(articles).Error; err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
+
+// // PreloadArticles preloads the Articles associated with the Page in the database.
+// func preloadArticles(db *gorm.DB, page *Page) error {
+// 	return db.Preload("Articles").First(page, page.ID).Error
+// }
+
+// // CreatePage creates a new Page in the database.
+// func createPage(db *gorm.DB, page *Page) error {
+// 	return db.Table("pages").Create(page).Error
+// }
+
+// // CreatePage creates a new Page in the database.
+// func createList(db *gorm.DB, list *List) error {
+// 	return db.Table("lists").Create(list).Error
+// }
+
+// // UpdateLastPageNextPageID updates the NextPageID of the last Page in the database.
+// func updateLastPageNextPageID(db *gorm.DB, lastPage *Page, newPageID uint) error {
+// 	return db.Model(lastPage).UpdateColumn("next_page_id", newPageID).Error
+// }
+
+// // SavePage saves the given Page to the database.
+// func savePage(db *gorm.DB, page *Page) error {
+// 	return db.Save(page).Error
+// }
+
+// // SaveArticle saves the given Article to the database.
+// func saveArticle(db *gorm.DB, article *Article) error {
+// 	return db.Save(article).Error
+// }
+
+// func deleteArticlesByPageID(db *gorm.DB, pageID uint) error {
+// 	err := db.Where("page_id = ?", pageID).Delete(&Article{}).Error
+// 	if err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
+
+// func deletePagesByListID(db *gorm.DB, listID uint) error {
+// 	// Delete all articles associated with the pages to be deleted
+// 	if err := db.Where("page_id IN (SELECT id FROM pages WHERE list_id = ?)", listID).Delete(&Article{}).Error; err != nil {
+// 		return err
+// 	}
+
+// 	// Delete all pages with the specified list ID
+// 	if err := db.Where("list_id = ?", listID).Delete(&Page{}).Error; err != nil {
+// 		return err
+// 	}
+
+// 	return nil
+// }
