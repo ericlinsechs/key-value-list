@@ -14,10 +14,6 @@ func TestSaveArticle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sqlDB, _ := db.DB()
-
-	defer sqlDB.Close()
-
 	// create necessary tables for testing
 	err = db.AutoMigrate(&Article{})
 	if err != nil {
@@ -60,10 +56,6 @@ func TestDeleteArticlesByPageID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	sqlDB, _ := db.DB()
-
-	defer sqlDB.Close()
 
 	// create necessary tables for testing
 	err = db.AutoMigrate(&Article{}, &Page{})

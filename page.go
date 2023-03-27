@@ -38,7 +38,7 @@ func updateLastPageNextPageID(db *gorm.DB, lastPage *Page, newPageID uint) error
 
 // SavePage saves the given Page to the database.
 func savePage(db *gorm.DB, page *Page) error {
-	return db.Save(page).Error
+	return db.Table("pages").Save(page).Error
 }
 
 func deletePagesByListID(db *gorm.DB, listID uint) error {

@@ -286,15 +286,15 @@ func addArticleToPage(newArticle Article) error {
 		log.Fatal(err)
 	}
 
-	err = preloadArticles(db, &page)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// err = preloadArticles(db, &page)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
 	log.Printf("Articles in page %v\n", page.ID)
-	for _, article := range page.Articles {
-		log.Printf("Article ID: %d, Title: %s, Author: %s, Content: %s\n", article.ID, article.Title, article.Author, article.Content)
-	}
+	// for _, article := range page.Articles {
+	// 	log.Printf("Article ID: %d, Title: %s, Author: %s, Content: %s\n", article.ID, article.Title, article.Author, article.Content)
+	// }
 	return nil
 }
 
