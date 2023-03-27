@@ -52,14 +52,14 @@ func connectToDB(host string, port string, user string, password string, dbname 
 		return nil, err
 	}
 
-	conn, _ = db.DB()
+	sqlDB, _ := db.DB()
 
-	conn.SetMaxIdleConns(5)
-	conn.SetMaxOpenConns(20)
-	conn.SetConnMaxLifetime(5 * time.Minute)
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetMaxOpenConns(20)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
 	// Check if the connection is successful
-	err = conn.Ping()
+	err = sqlDB.Ping()
 	if err != nil {
 		return nil, err
 	}
@@ -67,26 +67,36 @@ func connectToDB(host string, port string, user string, password string, dbname 
 	return db, nil
 }
 
-// CreateDatabaseIfNotExists creates a new database with the given name if it does not already exist.
-func createDatabaseIfNotExists(conn *sql.DB, dbName string) error {
-	// Check if the database already exists
-	rows, err := conn.Query(fmt.Sprintf("SELECT 1 FROM pg_database WHERE datname = '%s'", dbName))
+// CreateDatabase creates a new database with the given name if it does not already exist.
+func createDatabase(host string, port string, user string, password string, dbname string) error {
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s sslmode=disable",
+		host, port, user, password)
+	// Connect to the PostgreSQL server
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 
-	if rows.Next() {
-		// Database already exists, no need to create it
+	defer db.Close()
+
+	// Check if database exists
+	var exists bool
+	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1)", dbname).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if exists {
+		log.Printf("Database '%s' already exists\n", dbname)
 		return nil
 	}
 
 	// Database does not exist, create it
-	_, err = conn.Exec(fmt.Sprintf("CREATE DATABASE %s", dbName))
+	_, err = db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbname))
 	if err != nil {
 		return err
 	}
-	log.Println("Database created successfully")
+
+	log.Printf("Database '%s' created successfully\n", dbname)
 
 	return nil
 }

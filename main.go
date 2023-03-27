@@ -30,23 +30,19 @@ const (
 )
 
 var db *gorm.DB
-var conn *sql.DB
+var sqlDB *sql.DB
 
 func initDB() {
 	var err error
-	// Connect to the PostgreSQL server
-	db, err = connectToDB(host, port, user, password, "postgres")
+
+	// Create the database if it doesn't exist
+	err = createDatabase(host, port, user, password, dbname)
 	if err != nil {
-		panic(err)
+		fmt.Println("Error creating database:", err)
+		return
 	}
 
-	// Create a new database if it does not exist
-	conn, _ = db.DB()
-	if err = createDatabaseIfNotExists(conn, dbname); err != nil {
-		log.Fatal(err)
-	}
-
-	// Use the new database
+	// Connect to the PostgreSQL server
 	db, err = connectToDB(host, port, user, password, dbname)
 	if err != nil {
 		panic(err)
@@ -67,7 +63,8 @@ func initDB() {
 func main() {
 	initDB()
 
-	defer conn.Close()
+	sqlDB, _ = db.DB()
+	defer sqlDB.Close()
 
 	r := mux.NewRouter()
 
