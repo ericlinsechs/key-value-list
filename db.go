@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"time"
@@ -72,16 +71,18 @@ func createDatabase(host string, port string, user string, password string, dbna
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s sslmode=disable",
 		host, port, user, password)
 	// Connect to the PostgreSQL server
-	db, err := sql.Open("postgres", connStr)
+	db, err := gorm.Open(postgres.Open(connStr), &gorm.Config{})
 	if err != nil {
 		return err
 	}
 
-	defer db.Close()
+	sqlDB, _ := db.DB()
+
+	defer sqlDB.Close()
 
 	// Check if database exists
 	var exists bool
-	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1)", dbname).Scan(&exists)
+	err = sqlDB.QueryRow("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1)", dbname).Scan(&exists)
 	if err != nil {
 		return err
 	}
@@ -91,7 +92,7 @@ func createDatabase(host string, port string, user string, password string, dbna
 	}
 
 	// Database does not exist, create it
-	_, err = db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbname))
+	_, err = sqlDB.Exec(fmt.Sprintf("CREATE DATABASE %s", dbname))
 	if err != nil {
 		return err
 	}
