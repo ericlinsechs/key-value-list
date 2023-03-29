@@ -1,0 +1,17 @@
+version: "3.8"
+services:
+  key-value-list:
+    build:
+      dockerfile: Dockerfile
+    networks: 
+      - postgresNetwork
+    container_name: key-value-list-service
+  db:
+    image: postgres:latest
+    networks:
+      - postgresNetwork
+    container_name: postgres
+networks:
+  postgresNetwork:
+    driver: bridge
+    name: postgresNetwork
