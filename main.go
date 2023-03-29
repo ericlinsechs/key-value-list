@@ -25,7 +25,8 @@ const (
 )
 
 const (
-	ArticleSample = 21
+	ArticleSample            = 21
+	NumberOfArticleInOnePage = 5
 )
 
 var db *gorm.DB
@@ -165,7 +166,7 @@ func createNewPage(newPageID uint, ListID uint) (page Page) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Printf("last page: %+v", lastPage)
+		// log.Printf("last page: %+v", lastPage)
 		err = updateLastPageNextPageID(db, &lastPage, newPageID)
 		if err != nil {
 			log.Fatal(err)
@@ -200,7 +201,7 @@ func addArticleToPage(newArticle Article) error {
 		log.Fatal(err)
 	}
 
-	if len(page.Articles) >= 5 {
+	if len(page.Articles) >= NumberOfArticleInOnePage {
 		page = createNewPage(page.ID+1, page.ListID)
 		log.Printf("createNewPage id: %v\n", page.ID)
 	}
@@ -219,7 +220,7 @@ func addArticleToPage(newArticle Article) error {
 	// 	log.Fatal(err)
 	// }
 
-	log.Printf("Articles in page %v\n", page.ID)
+	log.Printf("Add Article to page id: %v\n", page.ID)
 	// for _, article := range page.Articles {
 	// 	log.Printf("Article ID: %d, Title: %s, Author: %s, Content: %s\n", article.ID, article.Title, article.Author, article.Content)
 	// }

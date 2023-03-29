@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -270,5 +271,77 @@ func TestHandleUpdate(t *testing.T) {
 		if updatedArticle.Title != "Updated Title" || updatedArticle.Author != "Updated Author" || updatedArticle.Content != "Updated Content" {
 			t.Errorf("Unexpected updated article data: got %+v, want %+v", updatedArticle, updatedArticle)
 		}
+	}
+}
+
+func TestHandleDeletePage(t *testing.T) {
+	// Create a new test list
+	list := List{ID: 99}
+
+	// Save the test list to the database
+	err := createList(db, &list)
+	if err != nil {
+		t.Errorf("Error saving list to database: %v", err)
+	}
+
+	// Create three test pages with the same list ID
+	for i := 1; i <= 3; i++ {
+		page := Page{ListID: list.ID}
+
+		// Save the test page to the database
+		err = savePage(db, &page)
+		if err != nil {
+			t.Errorf("Error saving page to database: %v", err)
+		}
+
+		// Add three test articles to the test page
+		for j := 1; j <= 3; j++ {
+			article := Article{
+				Title:   fmt.Sprintf("Test Article %d-%d", i, j),
+				Author:  "Test Author",
+				Content: "Test Content",
+				PageID:  page.ID,
+			}
+
+			// Save the test article to the database
+			err = saveArticle(db, &article)
+			if err != nil {
+				t.Errorf("Error saving article to database: %v", err)
+			}
+		}
+	}
+
+	// Create a new test HTTP request to delete the pages with the list ID
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("/page/delete?list_id=%d", list.ID), nil)
+	if err != nil {
+		t.Errorf("Error creating HTTP request: %v", err)
+	}
+
+	// Create a new test HTTP response recorder
+	rr := httptest.NewRecorder()
+
+	// Call the handleDeletePage function with the test HTTP request and response recorder
+	handleDeletePage(rr, req)
+
+	// Check the response status code
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("Unexpected response status code: got %v, want %v", status, http.StatusOK)
+	}
+
+	// Check that the pages and articles with the list ID were deleted from the database
+	var pages []Page
+	err = db.Where("list_id = ?", list.ID).Find(&pages).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Errorf("Error getting pages from database: %v", err)
+	} else if len(pages) != 0 {
+		t.Errorf("Unexpected number of pages in database: got %v, want %v", len(pages), 0)
+	}
+
+	var articles []Article
+	err = db.Where("page_id IN (SELECT id FROM pages WHERE list_id = ?)", list.ID).Find(&articles).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Errorf("Error getting articles from database: %v", err)
+	} else if len(articles) != 0 {
+		t.Errorf("Unexpected number of articles in database: got %v, want %v", len(articles), 0)
 	}
 }

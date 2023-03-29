@@ -189,7 +189,7 @@ func deletePage(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("list_id parameter is not a valid integer")
 	}
 
-	err = deletePagesByListID(db, listID)
+	err = deletePagesByListID(db, uint(listID))
 	if err != nil {
 		return fmt.Errorf("failed to delete articles: %v", err)
 	}
