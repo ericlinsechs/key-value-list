@@ -9,7 +9,7 @@ import (
 
 func TestGetListByID(t *testing.T) {
 	// Create an in-memory SQLite database for testing
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("Failed to connect to the database: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestGetListByID(t *testing.T) {
 
 func TestCreateList(t *testing.T) {
 	// Create an in-memory SQLite database for testing
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("Failed to connect to the database: %v", err)
 	}

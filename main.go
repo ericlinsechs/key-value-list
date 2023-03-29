@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
@@ -69,10 +70,10 @@ func main() {
 	r := mux.NewRouter()
 
 	// list
-	r.HandleFunc("/list/get/{list_id}", getHead).Methods("GET")
+	r.HandleFunc("/list/get", handleGetHead).Methods("GET")
 
 	// page
-	r.HandleFunc("/page/get/{page_id}", getPage).Methods("GET")
+	r.HandleFunc("/page/get", handleGetPage).Methods("GET")
 	r.HandleFunc("/page/set", set).Methods("POST")
 	r.HandleFunc("/page/update/{page_id}", update).Methods("POST")
 	r.HandleFunc("/page/delete/{list_id}", deletePage).Methods("DELETE")
@@ -80,52 +81,92 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8000", r))
 }
 
-func getHead(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["list_id"]
-	listID, err := strconv.ParseUint(id, 10, 64)
+func handleGetHead(w http.ResponseWriter, r *http.Request) {
+	if err := getHead(w, r); err != nil {
+		log.Printf("Error in getHead: %v\n", err)
+		if strings.Contains(err.Error(), "missing") {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		} else {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+}
+
+func getHead(w http.ResponseWriter, r *http.Request) error {
+	// Extract the value of the "list_id" query parameter
+	idStr := r.URL.Query().Get("list_id")
+	if idStr == "" {
+		return fmt.Errorf("list_id parameter is missing")
+	}
+	// Validate the list ID parameter
+	listID, err := strconv.Atoi(idStr)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("list_id parameter is not a valid integer")
 	}
 
+	if db == nil { // check if db is nil
+		return fmt.Errorf("database connection is nil")
+	}
+
+	// Fetch the list from the database
 	var list List
-	// where "id" is the ID of the list you want to retrieve
-	err = getListByID(db, uint(listID), &list)
-	if err != nil {
-		log.Fatal(err)
+	if err := getListByID(db, uint(listID), &list); err != nil {
+		return fmt.Errorf("error fetching list: %v", err)
 	}
 
+	// Return the list's next page ID as JSON
 	res := map[string]interface{}{
 		"next_page_id": list.NextPageID,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		return fmt.Errorf("error encoding JSON response: %v", err)
+	}
+
+	return nil
 }
 
-func getPage(w http.ResponseWriter, r *http.Request) {
-	var err error
-	var id string
+func handleGetPage(w http.ResponseWriter, r *http.Request) {
+	if err := getPage(w, r); err != nil {
+		log.Printf("Error in getPage: %v\n", err)
+		if strings.Contains(err.Error(), "missing") {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		} else {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+}
 
-	vars := mux.Vars(r)
-	id = vars["page_id"]
-
-	pageID, err := strconv.ParseUint(id, 10, 64)
+func getPage(w http.ResponseWriter, r *http.Request) error {
+	// Extract the value of the "list_id" query parameter
+	idStr := r.URL.Query().Get("page_id")
+	if idStr == "" {
+		return fmt.Errorf("page_id parameter is missing")
+	}
+	// Validate the list ID parameter
+	pageID, err := strconv.Atoi(idStr)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("page_id parameter is not a valid integer")
+	}
+
+	if db == nil { // check if db is nil
+		return fmt.Errorf("database connection is nil")
 	}
 
 	var page Page
 	// where "id" is the ID of the page you want to retrieve
 	err = getPageByID(db, uint(pageID), &page)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("error getting page from database: %v", err)
 	}
 
 	// Query the database to get the articles associated with the specified page ID
 	var articles []Article
 	err = getArticlesByPageID(db, uint(pageID), &articles)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("error getting articles from database: %v", err)
 	}
 
 	var articleData []map[string]string
@@ -142,7 +183,11 @@ func getPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		return fmt.Errorf("error encoding JSON response: %v", err)
+	}
+
+	return nil
 }
 
 func set(w http.ResponseWriter, r *http.Request) {

@@ -148,7 +148,7 @@ func TestPreloadArticles(t *testing.T) {
 
 func TestCreatePage(t *testing.T) {
 	// Initialize a new in-memory database
-	db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestCreatePage(t *testing.T) {
 
 func TestUpdateLastPageNextPageID(t *testing.T) {
 	// Initialize a new in-memory database
-	db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestUpdateLastPageNextPageID(t *testing.T) {
 
 func TestSavePage(t *testing.T) {
 	// Initialize a new in-memory database
-	db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -265,5 +265,48 @@ func TestSavePage(t *testing.T) {
 	// Compare the retrieved page with the original page
 	if retrievedPage.ListID != page.ListID || retrievedPage.NextPageID != page.NextPageID {
 		t.Errorf("Retrieved page does not match original page:\nExpected: %v\nActual: %v", page, retrievedPage)
+	}
+}
+
+func TestDeletePagesByListID(t *testing.T) {
+	// Initialize a new in-memory database
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("Failed to initialize database: %v", err)
+	}
+
+	// Migrate the database schema
+	err = db.AutoMigrate(&List{}, &Page{}, &Article{})
+	if err != nil {
+		t.Fatalf("Failed to migrate the database schema: %v", err)
+	}
+
+	// Create a test list and pages
+	testList := List{ID: 1, NextPageID: 2}
+	testPages := []Page{
+		{ID: 1, ListID: 1},
+		{ID: 2, ListID: 1},
+	}
+	if err := db.Table("lists").Create(&testList).Error; err != nil {
+		t.Fatalf("Failed to create test list: %v", err)
+	}
+	for i := range testPages {
+		if err := db.Table("pages").Create(&testPages[i]).Error; err != nil {
+			t.Fatalf("Failed to create test page: %v", err)
+		}
+	}
+
+	// Delete the test pages
+	if err := deletePagesByListID(db, 1); err != nil {
+		t.Fatalf("Failed to delete pages: %v", err)
+	}
+
+	// Verify that the pages have been deleted
+	var count int64
+	if err := db.Table("pages").Where("list_id = ?", 1).Count(&count).Error; err != nil {
+		t.Fatalf("Failed to count pages: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("Expected 0 pages after deletion, but got %d", count)
 	}
 }
