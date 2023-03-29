@@ -12,11 +12,11 @@ import (
 
 func TestConnectToDB(t *testing.T) {
 	// Define the test PostgreSQL server connection parameters
-	// host := "localhost"
-	// port := "5432"
-	// user := "testuser"
-	// password := "testpassword"
-	// dbname := "testdb"
+	host := "localhost"
+	port := "5432"
+	user := "myuser"
+	password := "mysecretpassword"
+	dbname := "my_database"
 
 	// Define the connection string for the PostgreSQL server
 	connStr := "host=" + host + " port=" + port + " user=" + user + " password=" + password + " dbname=" + dbname + " sslmode=disable"
@@ -48,10 +48,11 @@ func TestConnectToDB(t *testing.T) {
 
 func TestCreateDatabase(t *testing.T) {
 	// Define test data
-	// host := "localhost"
-	// port := "5432"
-	// user := "testuser"
-	// password := "testpassword"
+	host := "localhost"
+	port := "5432"
+	user := "myuser"
+	password := "mysecretpassword"
+	// dbname := "my_database"
 	dbname := "testdb"
 
 	// Connect to mock PostgreSQL server

@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,13 +12,13 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	host     = "localhost"
-	port     = "5432"
-	user     = "postgres"
-	password = "mysecretpassword"
-	dbname   = "my_database"
-)
+// const (
+// 	host     = "db"
+// 	port     = "5432"
+// 	user     = "myuser"
+// 	password = "mysecretpassword"
+// 	dbname   = "my_database"
+// )
 
 const (
 	FirstListKey = 1
@@ -32,15 +33,15 @@ const (
 var db *gorm.DB
 var sqlDB *sql.DB
 
-func initDB() {
+func initDB(host string, port string, user string, password string, dbname string) {
 	var err error
 
 	// Create the database if it doesn't exist
-	err = createDatabase(host, port, user, password, dbname)
-	if err != nil {
-		fmt.Println("Error creating database:", err)
-		return
-	}
+	// err = createDatabase(host, port, user, password, dbname)
+	// if err != nil {
+	// 	fmt.Println("Error creating database:", err)
+	// 	return
+	// }
 
 	// Connect to the PostgreSQL server
 	db, err = connectToDB(host, port, user, password, dbname)
@@ -54,14 +55,23 @@ func initDB() {
 		log.Fatalf("Error during migration: %v", err)
 	}
 
-	createListIfNotExists()
+	// createListIfNotExists()
 
 	// Create same sample articles if there is no data in articles table
 	createSampleArticle()
 }
 
 func main() {
-	initDB()
+	// Define command-line flags for the server network address, port, and API URLs.
+	serverPort := flag.Int("serverPort", 8000, "HTTP server network port")
+	dbHost := flag.String("dbHost", "localhost", "Database host name")
+	dbPort := flag.String("dbPort", "5432", "Database port")
+	dbUser := flag.String("dbUser", "myuser", "Database user")
+	dbPassword := flag.String("dbPassword", "mysecretpassword", "Database password")
+	dbName := flag.String("dbName", "my_database", "Database name")
+	flag.Parse()
+
+	initDB(*dbHost, *dbPort, *dbUser, *dbPassword, *dbName)
 
 	sqlDB, _ = db.DB()
 	defer sqlDB.Close()
@@ -77,7 +87,7 @@ func main() {
 	r.HandleFunc("/page/update", handleUpdate).Methods("POST")
 	r.HandleFunc("/page/delete", handleDeletePage).Methods("DELETE")
 
-	log.Fatal(http.ListenAndServe(":8000", r))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *serverPort), r))
 }
 
 func handleGetHead(w http.ResponseWriter, r *http.Request) {

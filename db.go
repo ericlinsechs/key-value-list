@@ -66,48 +66,6 @@ func connectToDB(host string, port string, user string, password string, dbname 
 	return db, nil
 }
 
-// func connectToDB(driver, host, port, user, password, dbname string) (*gorm.DB, error) {
-// 	var dialect gorm.Dialector
-
-// 	switch driver {
-// 	case "postgres":
-// 		// Define the connection string for the PostgreSQL server
-// 		connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
-
-// 		// Set the PostgreSQL driver
-// 		dialect = postgres.Open(connStr)
-// 	case "sqlite":
-// 		// Define the connection string for the SQLite database
-// 		// connStr := fmt.Sprintf("%s.db", dbname)
-
-// 		// Set the SQLite driver
-// 		dialect = sqlite.Open(":memory:")
-// 	default:
-// 		// Return an error if the specified driver is not supported
-// 		return nil, errors.New("unsupported database driver")
-// 	}
-
-// 	// Connect to the database
-// 	db, err := gorm.Open(dialect, &gorm.Config{})
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	sqlDB, _ := db.DB()
-
-// 	sqlDB.SetMaxIdleConns(5)
-// 	sqlDB.SetMaxOpenConns(20)
-// 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
-
-// 	// Check if the connection is successful
-// 	err = sqlDB.Ping()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return db, nil
-// }
-
 // CreateDatabase creates a new database with the given name if it does not already exist.
 func createDatabase(host string, port string, user string, password string, dbname string) error {
 	// Define the connection string for the PostgreSQL server

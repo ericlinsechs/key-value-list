@@ -1,0 +1,38 @@
+-- CREATE DATABASE IF NOT EXISTS my_database;
+SELECT 'CREATE DATABASE my_database' 
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'my_database');
+
+\c my_database
+
+CREATE TABLE lists (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    next_page_id INTEGER
+);
+
+CREATE TABLE pages (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    list_id INTEGER REFERENCES lists(id),
+    next_page_id INTEGER,
+    UNIQUE (list_id, id)
+);
+
+CREATE TABLE articles (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    title VARCHAR(255),
+    author VARCHAR(255),
+    content TEXT,
+    page_id INTEGER REFERENCES pages(id)
+);
+
+INSERT INTO lists (id, next_page_id)
+SELECT 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM lists WHERE id = 1);

@@ -1,16 +1,48 @@
 version: "3.8"
 services:
-  key-value-list:
-    build:
-      dockerfile: Dockerfile
-    networks: 
-      - postgresNetwork
-    container_name: key-value-list-service
   db:
     image: postgres:latest
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: my_database
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - postgresNetwork
     container_name: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d my_database -h db"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+  my-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: nonroot:nonroot
+    networks: 
+      - postgresNetwork
+    container_name: key-value-list-service
+    ports: 
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - "-serverPort"
+      - "8000"
+      - "-dbHost"
+      - "db"
+      - "-dbPort"
+      - "5432"
+      - "-dbUser"
+      - "myuser"
+      - "-dbPassword"
+      - "mysecretpassword"
+      - "-dbName"
+      - "my_database"
+
 networks:
   postgresNetwork:
     driver: bridge
